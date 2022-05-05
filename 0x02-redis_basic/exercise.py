@@ -13,8 +13,8 @@ def count_calls(method: Callable) -> Callable:
     @wraps(method)
     def wrapper(*args, **kwds):
         key = method.__qualname__
-        slf = args[0]
-        slf._redis.incr(key, 1)
+        self = args[0]
+        self._redis.incr(key, 1)
         return method(*args, **kwds)
     return wrapper
 
@@ -25,14 +25,32 @@ def call_history(method: Callable) -> Callable:
     def wrapper(*args, **kwds):
         input_key = f'{method.__qualname__}:inputs'
         output_key = f'{method.__qualname__}:outputs'
-        slf = args[0]
+        self = args[0]
 
-        slf._redis.rpush(input_key, str(args[1:]))
+        self._redis.rpush(input_key, str(args[1:]))
         output = method(*args, **kwds)
-        slf._redis.rpush(output_key, str(output))
+        self._redis.rpush(output_key, str(output))
 
         return output
     return wrapper
+
+
+def replay(method: Callable):
+    """Function that displays the history of calls of a particular function"""
+    _redis = redis.Redis()
+    key = method.__qualname__
+    count = int(_redis.get(key))
+
+    input_key = f'{method.__qualname__}:inputs'
+    output_key = f'{method.__qualname__}:outputs'
+
+    input_list = _redis.lrange(input_key, 0, count)
+    output_list = _redis.lrange(output_key, 0, count)
+
+    print(f'{method.__qualname__} was called {count} times:')
+    name = method.__qualname__
+    for i, o in zip(input_list, output_list):
+        print(f'{name}(*{i.decode("UTF-8")}) -> {o.decode("UTF-8")}')
 
 
 class Cache:
