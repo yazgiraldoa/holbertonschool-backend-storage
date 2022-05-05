@@ -19,6 +19,22 @@ def count_calls(method: Callable) -> Callable:
     return wrapper
 
 
+def call_history(method: Callable) -> Callable:
+    """Decorator that saves a list of inputs and outputs"""
+    @wraps(method)
+    def wrapper(*args, **kwds):
+        input_key = f'{method.__qualname__}:inputs'
+        output_key = f'{method.__qualname__}:outputs'
+        slf = args[0]
+
+        slf._redis.rpush(input_key, str(args[1:]))
+        output = method(*args, **kwds)
+        slf._redis.rpush(output_key, str(output))
+
+        return output
+    return wrapper
+
+
 class Cache:
     """
     Cache class
@@ -28,6 +44,7 @@ class Cache:
         self._redis = redis.Redis()
         self._redis.flushdb()
 
+    @call_history
     @count_calls
     def store(self, data: Union[str, Union[bytes, Union[int, float]]]) -> str:
         """Method to save a key in redis"""
